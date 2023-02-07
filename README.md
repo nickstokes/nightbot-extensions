@@ -6,8 +6,8 @@ Nightbot supports [fetching text and json responses from a GET request](https://
 
 This flask app interfaces with other EMS systems like stream-key-manage so that we can show extra info in the youtube chat.
 
-Currently, the only feature is an endpoint that can save and retrieve info text for the current streamer. 
-This could replace the individual !artistname commands with a single command like !whoisplaying.
+Currently, the only features are an endpoint that can save and retrieve info text for the current streamer. 
+This could replace the individual !artistname commands with a single command like !whoisplaying. And a way to save markers in a stream for reference later.
 
 How it works
 ------------
@@ -36,6 +36,14 @@ This is done in a GET request instead of a POST request because Nightbot doesn't
 There is no authentication, so auth will need to be added at the server level and saved in the Nightbot commands.  
 Nightbot can also restrict certain commands so that everyone can access the !whoisplaying command, but only mods can access the !saveinfo command.  
 
+- Save a marker
+
+    ```
+    GET /api/nbe/marker/add?text=marker%20text%20goes%20here.
+    ```
+
+This will calculate a link to the current timestamp and return it to chat, as well as save it in the database with the optional text.
+
 Todo:
  - Requesting and saving streamer info other than the currently active streamer.  
  - Allow users to set/edit their own text using a discord bot (waffle/nightbot?)  
@@ -47,5 +55,5 @@ To run this locally, you will need python and pip.
 
 In the project directory you can either use `pip install -e .` or `pip install -r requirements`.  
 You will need to create a `.env` file with the API address, Auth, and a filename for the SQLite database.  
-Before running you will need to initialize the SQLite database with the `flask db upgrade`.
+Before running you will need to initialize the SQLite database with the `flask db upgrade` command.
 To run a test/development server, use the `flask run` command.

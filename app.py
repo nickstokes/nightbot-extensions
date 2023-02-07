@@ -3,7 +3,7 @@ import os
 import json
 import logging
 
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
@@ -19,6 +19,8 @@ KEYBOT_URL = os.environ["NBE_KEYBOT_URL"]
 KEYBOT_USER = os.environ["NBE_KEYBOT_USER"]
 KEYBOT_PASS = os.environ["NBE_KEYBOT_PASS"]
 DB_FILE = os.environ["NBE_DB_FILE"]
+YOUTUBE_API_KEY = os.environ["NBE_YOUTUBE_API_KEY"]
+YOUTUBE_CHANNEL_ID = os.environ["NBE_YOUTUBE_CHANNEL_ID"]
 
 
 app = Flask(__name__)
@@ -54,6 +56,9 @@ class StreamKey():
         r = requests.get(KEYBOT_URL, auth=(KEYBOT_USER, KEYBOT_PASS))
         if r.status_code == requests.codes.ok:
             return StreamKey(r.text)
+    
+    def __repr__(self):
+        return f"{self.id[0:4]}..{self.id[-4:]}"
 
 
 class StreamerInfo(db.Model):
@@ -69,6 +74,49 @@ class StreamerInfo(db.Model):
         if streamer_info is None and discord_fallback and stream_key.discord_id:
             streamer_info = db.session.execute(db.select(StreamerInfo).where(StreamerInfo.discord_id==stream_key.discord_id)).scalar()
         return streamer_info
+
+
+class StreamMarker(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    marker_datetime_utc = db.Column(db.DateTime(), nullable=False)
+    stream_key_id = db.Column(db.String(36), nullable=True)
+    stream_key_nick = db.Column(db.String(100), nullable=True)
+    stream_key_dicord_id = db.Column(db.BigInteger(), nullable=True)
+    video_id = db.Column(db.String(15), nullable=True)
+    offset_secs = db.Column(db.Integer(), nullable=True)
+    marker_text = db.Column(db.String(400), nullable=True)
+    
+
+    def __init__(self, marker_datetime_utc, marker_text, stream_key, video_id, offset_seconds):
+        self.marker_datetime_utc = marker_datetime_utc
+        self.marker_text = marker_text
+        self.stream_key_id = stream_key.id
+        self.stream_key_nick = stream_key.nick
+        self.stream_key_discord_id = stream_key.discord_id
+        self.video_id = video_id
+        self.offset_seconds = int(offset_seconds)
+
+    def __str__(self):
+        return f"https://youtu.be/{self.video_id}?t={self.offset_seconds}"
+
+@app.route("/api/nbe/marker/add")
+def save_stream_marker():
+    logging.info("Stream marker requested")
+    try:
+        stream_key = StreamKey.get_active_key()
+        timenow = datetime.now(timezone.utc)
+        marker_text = request.args.get(key='text')
+        r = requests.get(f"https://www.googleapis.com/youtube/v3/search?part=snippet&channelId={YOUTUBE_CHANNEL_ID}&eventType=live&type=video&key={YOUTUBE_API_KEY}")
+        stream_info = r.json()
+        stream_start = datetime.fromisoformat(stream_info['items'][0]['snippet']['publishTime'])
+        offset_seconds = (timenow-stream_start).total_seconds()
+        stream_video_id = stream_info['items'][0]['id']['videoId']
+        marker = StreamMarker(timenow, marker_text, stream_key, stream_video_id, offset_seconds)
+        db.session.add(marker)
+        db.session.commit()
+        return str(marker)
+    except:
+        return "Sorry, something went wrong saving the marker."
 
 
 @app.route("/api/nbe/streamer")
