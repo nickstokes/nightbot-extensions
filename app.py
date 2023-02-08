@@ -46,14 +46,22 @@ class StreamKey():
     def __init__(self, stream_key_json):
         stream_key = json.loads(stream_key_json)
         self.stream_key_schema.validate(stream_key)
+        if isinstance(stream_key, list):
+
         self.id = stream_key.get("id")
         self.nick = stream_key.get("nick")
         self.discord_id = stream_key.get("discord_id")
     
     def get_active_key():
-        r = requests.get(KEYBOT_URL, auth=(KEYBOT_USER, KEYBOT_PASS))
+        r = requests.get(f'{KEYBOT_URL}/key/active', auth=(KEYBOT_USER, KEYBOT_PASS))
         if r.status_code == requests.codes.ok:
             return StreamKey(r.text)
+        else:
+            return None
+    
+    def get_key_by_id(key_id):
+        r = requests.get(f'{KEYBOT_URL}/key/', auth=(KEYBOT_USER, KEYBOT_PASS))
+        keys = r.json()
 
 
 class StreamerInfo(db.Model):
@@ -62,16 +70,32 @@ class StreamerInfo(db.Model):
     discord_id = db.Column(db.BigInteger, nullable=True)
     info_text = db.Column(db.Unicode(400), nullable=False)
 
-    def get_instance_by_stream_key(stream_key, discord_fallback=False):
+    def __init__(self, stream_key_id=None, info_text=None, discord_id=None):
+        self.stream_key_id=stream_key_id
+        self.info_text=info_text
+        self.discord_id=discord_id
+
+    @classmethod
+    def from_stream_key(stream_key, discord_fallback=False):
          # try getting info from exact stream key.
-        streamer_info = db.session.execute(db.select(StreamerInfo).where(StreamerInfo.stream_key_id==stream_key.id)).scalar()
+        streamer_info = StreamerInfo.get_instance_by_stream_key_id(stream_key.id)
         # attempt lookup using discord_id if match from key not found.
         if streamer_info is None and discord_fallback and stream_key.discord_id:
-            streamer_info = db.session.execute(db.select(StreamerInfo).where(StreamerInfo.discord_id==stream_key.discord_id)).scalar()
+            streamer_info = StreamerInfo.get_instance_by_stream_key_id(stream_key.discord_id).scalar()
+        return streamer_info
+    
+    @classmethod
+    def from_stream_key_id(stream_key_id):
+        streamer_info = db.session.execute(db.select(StreamerInfo).where(StreamerInfo.stream_key_id==stream_key_id)).scalar()
+        return streamer_info
+    
+    @classmethod
+    def from_discord_id(discord_id):
+        streamer_info = db.session.execute(db.select(StreamerInfo).where(StreamerInfo.discord_id==discord_id)).scalar()
         return streamer_info
 
 
-@app.route("/api/nbe/streamer")
+@app.get("/api/nbe/streamer-info/active")
 def get_streamer_info():
     try:
         stream_key = StreamKey.get_active_key()
@@ -85,7 +109,28 @@ def get_streamer_info():
         return "Sorry, there was a problem getting streamer info"
 
 
-@app.route("/api/nbe/streamer/add") # this isn't done as a 'POST' request to /streamer-info because NightBot can only sent GET requests.
+@app.post("/api/nbe/streamer-info")
+def post_streamer_info():
+    try:
+        streamer_data = request.get_json(silent=True)
+        existing_streamer_info = None
+        if 'stream_key_id' in streamer_data:
+            existing_streamer_info = StreamerInfo.from_stream_key_id(streamer_data['stream_key_id'])
+        if not existing_streamer_info and 'discord_id' in streamer_data:
+            existing_streamer_info = StreamerInfo.from_discord_id(streamer_data['discord_id'])
+
+        stream_key = StreamKey.get_active_key()
+        streamer_info = StreamerInfo.from_stream_key(stream_key, discord_fallback=True)
+        if streamer_info:
+            return streamer_info.info_text
+        else:
+            return "No info found for current streamer"
+    except:
+        logging.exception("Error getting streamer info")
+        return "Sorry, there was a problem getting the streamer info"
+
+
+@app.route("/api/nbe/add-streamer-info") # this isn't done as a 'POST' request to /streamer-info because NightBot can only sent GET requests.
 def add_streamer_info():
     streamer_text = request.args.get(key='text')
     if not streamer_text:
@@ -98,13 +143,14 @@ def add_streamer_info():
             streamer_info.info_text = streamer_text
             db.session.commit()
         else: # otherwise update existing record.
-            streamer_info = StreamerInfo()
-            streamer_info.stream_key_id = stream_key.id
-            streamer_info.discord_id = stream_key.discord_id
-            streamer_info.info_text = streamer_text
+            streamer_info = StreamerInfo(stream_key.id, stream_key.discord_id, streamer_text)
             db.session.add(streamer_info)
             db.session.commit()
-        return f"That info has been saved for the current streamer, you can ask me to recall it by saying !who."
+        return f"The info has been saved for the current streamer, you can ask me to recall it by saying !who."
     except:
         logging.exception("Error saving streamer info")
         return "Sorry, there was a problem saving the streamer info."
+
+@app.route("/ems-youtube-chat")
+def redirect_to_youtube_chat():
+    
