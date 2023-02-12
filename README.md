@@ -15,7 +15,7 @@ How it works
  - Get current streamer info
 
     ```
-    GET /api/nbe/streamer
+    GET /api/nbe/get-streamer-info
     ```
 
 This will attempt to look up the current streamer key from the /api/key/active endpoint on stream-key-manage,
@@ -27,10 +27,10 @@ can have different artist names and social media addresses.
 - Save current streamer info
 
     ```
-    GET /api/nbe/streamer/add?text=streamer%20info%20goes%20here.
+    GET /api/nbe/add-streamer-info?text=streamer%20info%20goes%20here.
     ```
 
-A GET request to /api/nbe/streamer/add with a querystring that has a 'text' attribute will save the URL Encoded text under the current live streamer's stream key.  
+A GET request to this endpoint with a querystring that has a 'text' attribute will save the URL Encoded text under the current live streamer's stream key.  
 This is done in a GET request instead of a POST request because Nightbot doesn't support POST requests. This could be used in a command like "!saveinfo Check out artistname's instagram here"
 
 There is no authentication, so auth will need to be added at the server level and saved in the Nightbot commands.  
