@@ -32,11 +32,11 @@ class StreamKey():
     stream_key_schema = Schema(
         {
             "id": str,
-            "cooldown": iso_date,
+            #"cooldown": iso_date,
             "priority": int,
             "state": str,
-            "pending_cooldown": iso_date,
-            "live_since": iso_date,
+            #"pending_cooldown": iso_date,
+            #"live_since": iso_date,
             Optional("nick"): str,
             Optional("discord_id"): Use(int)
         },
@@ -51,9 +51,13 @@ class StreamKey():
         self.discord_id = stream_key.get("discord_id")
     
     def get_active_key():
-        r = requests.get(KEYBOT_URL, auth=(KEYBOT_USER, KEYBOT_PASS))
+        r = requests.get(KEYBOT_URL + '/key/active', auth=(KEYBOT_USER, KEYBOT_PASS))
         if r.status_code == requests.codes.ok:
             return StreamKey(r.text)
+        elif r.status_code == 404:
+            return None
+        else:
+            raise LookupError("Error retrieving active key")
 
 
 class StreamerInfo(db.Model):
@@ -71,40 +75,44 @@ class StreamerInfo(db.Model):
         return streamer_info
 
 
-@app.route("/api/nbe/streamer")
+@app.route("/api/nbe/get-streamer-info")
 def get_streamer_info():
     try:
         stream_key = StreamKey.get_active_key()
+        if stream_key is None:
+            return "Hmm, it looks like nobody is streaming right now."
         streamer_info = StreamerInfo.get_instance_by_stream_key(stream_key, discord_fallback=True)
         if streamer_info:
             return streamer_info.info_text
         else:
-            return "No info found for current streamer"
+            return "I couldn't fine any info for the current streamer."
     except:
         logging.exception("Error getting streamer info")
-        return "Sorry, there was a problem getting streamer info"
+        return "Sorry, there was a problem getting streamer info."
 
 
-@app.route("/api/nbe/streamer/add") # this isn't done as a 'POST' request to /streamer-info because NightBot can only sent GET requests.
+@app.route("/api/nbe/add-streamer-info") # this isn't done as a 'POST' request to /streamer-info because NightBot can only sent GET requests.
 def add_streamer_info():
-    streamer_text = request.args.get(key='text')
-    if not streamer_text:
-        return "Please include the artist info you would like to save."
     try:
+        streamer_text = request.args.get(key='text')
+        if not streamer_text:
+            return "Please include the artist info you would like to save."
         stream_key = StreamKey.get_active_key()
+        if stream_key is None:
+            return "Hmm, it looks like nobody is streaming right now."
         streamer_info = StreamerInfo.get_instance_by_stream_key(stream_key, discord_fallback=False)
-        if streamer_info is not None: # if existing streamer info not found, create new one.
+        if streamer_info is not None: # if existing streamer info us found, update existing record.
             streamer_info.discord_id = stream_key.discord_id
             streamer_info.info_text = streamer_text
             db.session.commit()
-        else: # otherwise update existing record.
+        else: # otherwise create new one.
             streamer_info = StreamerInfo()
             streamer_info.stream_key_id = stream_key.id
             streamer_info.discord_id = stream_key.discord_id
             streamer_info.info_text = streamer_text
             db.session.add(streamer_info)
             db.session.commit()
-        return f"That info has been saved for the current streamer, you can ask me to recall it by saying !who."
+        return f"Done! Info has been saved for the current streamer."
     except:
         logging.exception("Error saving streamer info")
         return "Sorry, there was a problem saving the streamer info."
