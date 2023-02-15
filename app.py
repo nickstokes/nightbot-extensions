@@ -27,23 +27,7 @@ migrate = Migrate(app, db)
 
 
 class StreamKey():
-    iso_date = Use(datetime.fromisoformat)
-    stream_key_schema = Schema(
-        {
-            "id": str,
-            "cooldown": iso_date,
-            "priority": int,
-            "state": str,
-            "pending_cooldown": iso_date,
-            "live_since": iso_date,
-            Optional("nick"): str,
-            Optional("discord_id"): Use(int)
-        },
-            ignore_extra_keys=True
-    )
-
     def __init__(self, stream_key: object):
-            self.stream_key_schema.validate(stream_key)
             self.id = stream_key.get("id")
             self.nick = stream_key.get("nick")
             self.discord_id = stream_key.get("discord_id")
@@ -60,10 +44,13 @@ class StreamKey():
     
     @classmethod
     def from_id(cls, key_id: str):
-        r = requests.get(f'{KEYBOT_URL}/key/', auth=(KEYBOT_USER, KEYBOT_PASS)) # get all keys
-        keys = r.json() # convert to json
-        found_key = next((StreamKey(k) for k in keys if k.get('id') == key_id), None) # find the first matching key, or None
-        return found_key
+        r = requests.get(f'{KEYBOT_URL}/key/{key_id}', auth=(KEYBOT_USER, KEYBOT_PASS))
+        if r.status_code == requests.codes.ok:
+            return StreamKey(r.json())
+        elif r.status_code == 404:
+            return None
+        else:
+            raise LookupError("Error retrieving specific key")
 
 
 class StreamerInfo(db.Model):
