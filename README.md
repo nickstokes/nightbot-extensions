@@ -31,7 +31,7 @@ found, nobody is streaming, or there was an error, plaintext messages are return
     GET /api/nbe/add-streamer-info?text=streamer%20info%20goes%20here.
     ```
 
-A GET request to /api/nbe/streamer/add with a querystring that has a 'text' attribute will save the URL Encoded text under the current live streamer's stream key.  
+A GET request to this endpoint with a querystring that has a 'text' attribute will save the URL Encoded text under the current live streamer's stream key.  
 This is done in a GET request instead of a POST request because Nightbot doesn't support POST requests. This could be used in a command like "!saveinfo Check out artistname's instagram here". The endpoint responds in plain text whether the infomation is successfully saved.
 
 There is no authentication, so auth will need to be added at the server level and saved in the Nightbot commands.  
