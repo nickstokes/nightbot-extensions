@@ -145,6 +145,22 @@ def put_streamer_info():
         logging.exception("Error while streamer info")
         return "Sorry, there was a problem getting the streamer info", 500
 
+@app.get("/api/nbe/streamer-info/<key_id>")
+def get_streamer_info_by_id(key_id):
+    try:
+        stream_key = StreamKey.from_id(key_id)
+        if not stream_key:
+            return "Not found", 404
+
+        streamer_info = StreamerInfo.from_stream_key(stream_key)
+        if streamer_info and streamer_info.info_text:
+            return streamer_info.info_text
+        else:
+            return "No info found for this key"
+
+    except:
+        logging.exception(f'Error getting streamer info for key {key_id}')
+        return "Sorry, there was a problem getting the streamer info"
 
 @app.get("/api/nbe/streamer-info") # standard json endpoint
 def get_all_streamer_info():
